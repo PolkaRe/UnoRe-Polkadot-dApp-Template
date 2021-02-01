@@ -330,11 +330,9 @@ describe('Bounties', () => {
 
   describe('create bounty modal', () => {
     it('validates bounty length', async () => {
-      const { findByTestId, findByText } = renderBounties({ maximumReasonLength: 5 });
+      const { findByRole, findByTestId, findByText } = renderBounties({ maximumReasonLength: 5 });
 
-      const addBountyButton = await findByText('Add Bounty');
-
-      fireEvent.click(addBountyButton);
+      await clickButtonWithName('Add Bounty', findByRole);
 
       const titleInput = await findByTestId('bounty title');
 
@@ -396,25 +394,27 @@ describe('Bounties', () => {
   });
 
   describe('close bounty modal', () => {
+    let bountiesPage: BountiesPage;
+
+    beforeEach(async () => {
+      bountiesPage = new BountiesPage(augmentedApi);
+    });
+
     it('creates closeBounty proposal', async () => {
-      const bounty = bountyWith({ status: 'Funded' });
-      const { findByTestId, findByText, getByRole } = renderOneBounty(bounty);
+      const { findByRole, findByTestId, findByText } = bountiesPage.renderOne(bountyWith({ status: 'Funded' }));
 
       await clickElementWithTestId('extra-actions', findByTestId);
 
       await clickElementWithText('Close', findByText);
 
-      expect(await findByText('This action will create a Council proposal to close the Bounty.')).toBeTruthy();
+      await bountiesPage.expectText('This action will create a Council proposal to close the Bounty.');
 
-      const combobox = getByRole('combobox');
-      const proposingAccountInput = combobox.children[0];
+      bountiesPage.enterProposingAccount(alice);
 
-      fireEvent.change(proposingAccountInput, { target: { value: ferdie } });
+      await clickButtonWithName('Close Bounty', findByRole)
 
-      const closeBountyButton = getByRole('button', { name: 'Close Bounty' });
-
-      fireEvent.click(closeBountyButton);
-      expect(queueExtrinsic).toHaveBeenCalledWith(expect.objectContaining({ accountId: ferdie, extrinsic: 'mockProposeExtrinsic' }));
+      bountiesPage.expectExtrinsicQueued({ accountId: alice, extrinsic: 'mockProposeExtrinsic' });
+      expect(mockBountyHooks.bountyApi.closeBounty).toHaveBeenCalledWith(aBountyIndex(0));
     });
 
     it('is not available when close bounty motion already exists', async () => {
@@ -478,60 +478,54 @@ describe('Bounties', () => {
   });
 
   describe('slash curator modal', () => {
+    let bountiesPage: BountiesPage;
+
+    beforeEach(async () => {
+      bountiesPage = new BountiesPage(augmentedApi);
+    });
+
     it('gives up on the Curator role of an Active bounty', async () => {
       const bounty = aBounty({ status: bountyStatusWith({ curator: alice }) });
-      const { findByRole, findByTestId, findByText, getAllByRole } = renderOneBounty(bounty);
+      const { findByRole, findByTestId, findByText } = bountiesPage.renderOne(bounty);
 
       await clickElementWithTestId('extra-actions', findByTestId);
 
       await clickElementWithText('Give Up', findByText);
 
-      expect(await findByText('This action will unassign you from a curator role.')).toBeTruthy();
+      await bountiesPage.expectText('This action will unassign you from a curator role.');
 
-      const comboboxes = getAllByRole('combobox');
-
-      const proposingAccountInput = comboboxes[0].children[0];
-
-      fireEvent.change(proposingAccountInput, { target: { value: alice } });
+      bountiesPage.enterProposingAccount(alice);
 
       await clickButtonWithName('Approve', findByRole);
 
-      expect(queueExtrinsic).toHaveBeenCalledWith(expect.objectContaining({ accountId: alice, extrinsic: 'mockUnassignExtrinsic' }));
+      bountiesPage.expectExtrinsicQueued({ accountId: alice, extrinsic: 'mockUnassignExtrinsic' });
       expect(mockBountyHooks.bountyApi.unassignCurator).toHaveBeenCalledWith(aBountyIndex(0));
     });
 
     it('creates a motion when slashing a PendingPayout bounty', async () => {
-      const bounty = bountyWith({ status: 'PendingPayout' });
-
-      const { findByRole, findByTestId, findByText, getAllByRole } = renderOneBounty(bounty);
+      const { findByRole, findByTestId, findByText } = bountiesPage.renderOne(bountyWith({ status: 'PendingPayout' }));
 
       await clickElementWithTestId('extra-actions', findByTestId);
 
       await clickElementWithText('Slash Curator (Council)', findByText);
 
-      expect(await findByText('This action will create a Council motion to slash the Curator.')).toBeTruthy();
+      await bountiesPage.expectText('This action will create a Council motion to slash the Curator.');
 
-      const comboboxes = getAllByRole('combobox');
-
-      const proposingAccountInput = comboboxes[0].children[0];
-
-      fireEvent.change(proposingAccountInput, { target: { value: alice } });
-      fireEvent.keyDown(proposingAccountInput, { code: 'Enter', key: 'Enter' });
+      bountiesPage.enterProposingAccount(alice);
 
       await clickButtonWithName('Approve', findByRole);
 
-      expect(queueExtrinsic).toHaveBeenCalledWith(expect.objectContaining({ accountId: alice, extrinsic: 'mockProposeExtrinsic' }));
+      bountiesPage.expectExtrinsicQueued({ accountId: alice, extrinsic: 'mockProposeExtrinsic' });
     });
   });
 
   describe('award beneficiary action modal', () => {
     it('awards the beneficiary ', async () => {
       const bounty = aBounty({ status: bountyStatusWith({ curator: alice }) });
-      const { findByText, getAllByRole } = renderOneBounty(bounty);
+      const { findByRole, findByText, getAllByRole } = renderOneBounty(bounty);
 
-      const awardBeneficiaryButton = await findByText('Award Beneficiary');
+      await clickButtonWithName('Award Beneficiary', findByRole);
 
-      fireEvent.click(awardBeneficiaryButton);
       expect(await findByText('This action will award the Beneficiary and close the bounty after a delay.')).toBeTruthy();
       const comboboxes = getAllByRole('combobox');
 
@@ -540,9 +534,7 @@ describe('Bounties', () => {
       fireEvent.change(beneficiaryAccountInput, { target: { value: bob } });
       fireEvent.keyDown(beneficiaryAccountInput, { code: 'Enter', key: 'Enter' });
 
-      const acceptButton = await findByText('Approve');
-
-      fireEvent.click(acceptButton);
+      await clickButtonWithName('Approve', findByRole);
 
       expect(queueExtrinsic).toHaveBeenCalledWith(expect.objectContaining({ accountId: alice, extrinsic: 'mockAwardExtrinsic' }));
       expect(mockBountyHooks.bountyApi.awardBounty).toHaveBeenCalledWith(aBountyIndex(0), bob);
